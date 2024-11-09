@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skin Condition Detection</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <style>
+        /* General Page Styling */
+        body {
+            background-color: #ffffff;
+            color: #333333;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* Main Container Styling */
+        #main-container, #result-container {
+            text-align: center;
+            padding: 30px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0px 6px 20px rgba(0, 0, 0, 0.1);
+            max-width: 450px;
+            width: 90%;
+            transition: transform 0.3s ease;
+            display: none;
+        }
+        #main-container.active, #result-container.active {
+            display: block;
+        }
+        #main-container:hover {
+            transform: translateY(-5px);
+        }
+
+        /* Logo Styling */
+        #logo {
+            width: 100px;
+            margin-bottom: 15px;
+        }
+
+        /* Page Title Styling */
+        h1 {
+            font-size: 2.2em;
+            font-weight: 600;
+            color: #333333;
+            margin-bottom: 15px;
+        }
+        p {
+            color: #666666;
+            font-size: 1em;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        /* Button Styling */
+        button {
+            background-color: #0071e3;
+            color: #ffffff;
+            font-size: 1em;
+            padding: 12px 28px;
+            margin: 10px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            box-shadow: 0px 4px 12px rgba(0, 113, 227, 0.3);
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        button:hover {
+            background-color: #005bb5;
+            transform: scale(1.05);
+        }
+        button:active {
+            background-color: #004494;
+            transform: scale(1);
+        }
+
+        /* Webcam and Label Container Styling */
+        #webcam-container {
+            margin-top: 20px;
+        }
+        #label-container div {
+            font-size: 1.1em;
+            color: #333333;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Main Detection Container -->
+    <div id="main-container" class="active">
+        <img id="logo" src="five.png" alt="Logo">
+        <h1>Skin Condition Detection</h1>
+        <p>Using advanced AI technology to identify and analyze skin conditions accurately. Begin the assessment below.</p>
+        <div id="teachable-machine-section">
+            <button type="button" onclick="init()">Start Camera</button>
+            <button type="button" onclick="captureDiagnosis()">Capture Diagnosis</button>
+            <div id="webcam-container"></div>
+            <div id="label-container"></div>
+        </div>
+    </div>
+
+    <!-- Result Display Container -->
+    <div id="result-container">
+        <h1>Diagnosis Result</h1>
+        <p id="diagnosis"></p>
+        <p id="confidence"></p>
+        <button onclick="downloadPDF()">Download Medical Report as PDF</button>
+        <button onclick="goBack()">Go Back</button>
+    </div>
+
+    <!-- Script Tags for Teachable Machine and TensorFlow -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+        const URL = "https://teachablemachine.withgoogle.com/models/OnZe8QD58/";
+
+        let model, webcam, labelContainer, maxPredictions;
+        let diagnosis = "";
+        let highestProbability = 0;
+
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            const flip = true;
+            webcam = new tmImage.Webcam(400, 400, flip);
+            await webcam.setup();
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+
+            highestProbability = 0;
+            let bestDiagnosis = "";
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const probability = prediction[i].probability.toFixed(2);
+                const classPrediction = prediction[i].className + ": " + probability;
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+
+                if (prediction[i].probability > highestProbability) {
+                    highestProbability = prediction[i].probability;
+                    bestDiagnosis = prediction[i].className;
+                }
+            }
+            diagnosis = bestDiagnosis;
+        }
+
+        function captureDiagnosis() {
+            if (diagnosis) {
+                document.getElementById("diagnosis").innerText = `Diagnosis: ${diagnosis}`;
+                document.getElementById("confidence").innerText = `Confidence: ${(highestProbability * 100).toFixed(2)}%`;
+
+                document.getElementById("main-container").classList.remove("active");
+                document.getElementById("result-container").classList.add("active");
+            } else {
+                alert("No diagnosis captured. Please try again.");
+            }
+        }
+
+        function goBack() {
+            document.getElementById("result-container").classList.remove("active");
+            document.getElementById("main-container").classList.add("active");
+        }
+
+        function downloadPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Ensure text wraps properly
+            const maxWidth = 170;
+
+            doc.setFontSize(16);
+            doc.setFont("helvetica", "bold");
+            doc.text("Dermatology Diagnostic Report: AI-Powered 'Pocket Doctor' Edition", 20, 20);
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Patient Information", 20, 40);
+            doc.line(20, 42, 190, 42);
+            doc.setFont("helvetica", "normal");
+            doc.text("Name: John Doe", 20, 50);
+            doc.text("Age: 45", 20, 60);
+            doc.text("Gender: Male", 20, 70);
+            doc.text("Date of Consultation: " + new Date().toLocaleDateString(), 20, 80);
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Chief Complaint and Self-Assessment", 20, 100);
+            doc.line(20, 102, 190, 102);
+            doc.setFont("helvetica", "normal");
+            doc.text("Primary Concern: Persistent itching and redness over the past few weeks.", 20, 110, { maxWidth });
+            doc.text("Medical Background: History of allergies and occasional eczema flare-ups. Patient notes indicate discomfort primarily in the evening and sensitivity to environmental changes.", 20, 120, { maxWidth });
+
+            doc.setFont("helvetica", "bold");
+            doc.text("AI Examination Summary", 20, 140);
+            doc.line(20, 142, 190, 142);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Condition Detected: ${diagnosis}`, 20, 150, { maxWidth });
+            doc.text(`Confidence Level: ${(highestProbability * 100).toFixed(2)}%`, 20, 160, { maxWidth });
+            doc.text("Severity Level: Moderate. Based on the severity, follow-up care with a dermatologist is advised within the next month.", 20, 170, { maxWidth });
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Detailed Condition Analysis", 20, 190);
+            doc.line(20, 192, 190, 192);
+            doc.setFont("helvetica", "normal");
+            doc.text("Lesions: None observed, but minor inflammatory signs are present.", 20, 200, { maxWidth });
+            doc.text("Erythema (Redness): Mild to moderate across affected areas, suggesting controlled irritation.", 20, 210, { maxWidth });
+            doc.text("Scaling/Flaking: Minimal, primarily on exposed areas.", 20, 220, { maxWidth });
+            doc.text("Skin Texture and Thickness: Normal, with mild irregularities on the dermal surface. Further assessment recommended if symptoms persist.", 20, 230, { maxWidth });
+
+            doc.addPage();
+            doc.setFont("helvetica", "bold");
+            doc.text("Preliminary Treatment Suggestions", 20, 20);
+            doc.line(20, 22, 190, 22);
+            doc.setFont("helvetica", "normal");
+            doc.text("Home Treatment: Regular application of emollients, gentle cleansers, and barrier repair creams to support moisture retention.", 20, 30, { maxWidth });
+            doc.text("Avoidance Recommendations: Limit exposure to known allergens or irritants. Monitor skin responses closely.", 20, 40, { maxWidth });
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Clinical Notes for Dermatologist Reference", 20, 60);
+            doc.line(20, 62, 190, 62);
+            doc.setFont("helvetica", "normal");
+            doc.text("AI Model Disclaimer: This report is generated by AI and should not substitute for professional medical advice.", 20, 70, { maxWidth });
+            doc.text("Summary for Specialist: Patient experiences persistent symptoms. Follow-up suggested.", 20, 80, { maxWidth });
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Referral Section", 20, 100);
+            doc.line(20, 102, 190, 102);
+            doc.setFont("helvetica", "normal");
+            doc.text("Referral: Referral to Dermatologist based on severity. Timely consultation recommended.", 20, 110, { maxWidth });
+            doc.text("Suggested Follow-Up Plan: Book in-person/virtual within a month. Emergency contact if severe symptoms.", 20, 120, { maxWidth });
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Patient Care Instructions", 20, 140);
+            doc.line(20, 142, 190, 142);
+            doc.setFont("helvetica", "normal");
+            doc.text("Daily Routine: Maintain skin hydration. Avoid known irritants.", 20, 150, { maxWidth });
+            doc.text("Escalation Indicators: Worsening redness, severe discomfort, or spreading symptoms. Seek immediate attention if noted.", 20, 160, { maxWidth });
+
+            doc.save("Comprehensive_Medical_Report.pdf");
+        }
+    </script>
+</body>
+</html>
